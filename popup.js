@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const sentimentCounts = { "1": 0, "0": 0, "-1": 0 };
         const sentimentData = []; // For trend graph
         const totalSentimentScore = predictions.reduce((sum, item) => sum + parseInt(item.sentiment), 0);
-        predictions.forEach((item, index) => {
+        predictions.forEach((item) => {
           sentimentCounts[item.sentiment]++;
           sentimentData.push({
             timestamp: item.timestamp,
@@ -102,6 +102,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Fetch and display the word cloud inside the wordcloud-container div
         await fetchAndDisplayWordCloud(comments.map(comment => comment.text));
+
+        // Add the AI Summary section
+        outputDiv.innerHTML += `
+          <div class="section">
+            <div class="section-title">AI Summary of Comments</div>
+            <div id="summary-container"><p>Generating summary...</p></div>
+          </div>`;
+
+        // Fetch and display the summary
+        await fetchAndDisplaySummary(
+          predictions.map(p => ({ text: p.comment, sentiment: p.sentiment }))
+        );
 
         // Add the top comments section
         outputDiv.innerHTML += `
@@ -238,6 +250,58 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (error) {
       console.error("Error fetching trend graph image:", error);
       outputDiv.innerHTML += "<p>Error fetching trend graph image.</p>";
+    }
+  }
+
+    function simpleMarkdownToHtml(text) {
+    let html = text;
+
+    // Escape any existing HTML tags first (basic safety)
+    html = html.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // Headers (### Heading)
+    html = html.replace(/^### (.*$)/gim, "<h4>$1</h4>");
+    html = html.replace(/^## (.*$)/gim, "<h3>$1</h3>");
+    html = html.replace(/^# (.*$)/gim, "<h2>$1</h2>");
+
+    // Bold (**text**)
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+    // Italic (*text*)
+    html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+
+    // Bullet points (lines starting with "* " or "- ")
+    html = html.replace(/^\s*[\*\-]\s+(.*)$/gim, "<li>$1</li>");
+    html = html.replace(/(<li>.*<\/li>)/gims, "<ul>$1</ul>");
+
+    // Numbered list items (1. text)
+    html = html.replace(/^\s*\d+\.\s+(.*)$/gim, "<li>$1</li>");
+
+    // Line breaks for remaining plain lines
+    html = html.replace(/\n{2,}/g, "<br><br>");
+    html = html.replace(/\n/g, "<br>");
+
+    return html;
+  }
+
+  async function fetchAndDisplaySummary(comments) {
+    try {
+      const response = await fetch(`${API_URL}/summarize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comments })
+      });
+      const result = await response.json();
+      const container = document.getElementById('summary-container');
+      if (!response.ok || result.error) {
+        container.innerHTML = `<p>${result.error || 'Summary unavailable.'}</p>`;
+        return;
+      }
+      container.innerHTML = `<p class="summary-text">${result.summary}</p>`;
+    } catch (error) {
+      console.error("Error fetching summary:", error);
+      const container = document.getElementById('summary-container');
+      if (container)       container.innerHTML = `<div class="summary-text">${simpleMarkdownToHtml(result.summary)}</div>`;
     }
   }
 });
