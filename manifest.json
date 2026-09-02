@@ -11,6 +11,7 @@
     "activeTab",
     "scripting",
     "http://localhost/*",
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "http://myelb-752612147.us-east-1.elb.amazonaws.com/*"
   ]
 }

@@ -3,16 +3,18 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const outputDiv = document.getElementById("output");
   const API_KEY = 'AIzaSyBqmv3xHtxPzCzyE0Ysd-0_5Xo1eZLLUos';  // Replace with your actual YouTube Data API key
-  const API_URL = 'http://localhost:5000';
+  const API_URL = 'http://myelb-752612147.us-east-1.elb.amazonaws.com';
 
   // Get the current tab's URL
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const url = tabs[0].url;
-    const youtubeRegex = /^https:\/\/(?:www\.)?youtube\.com\/watch\?v=([\w-]{11})/;
-    const match = url.match(youtubeRegex);
+    const urlObj = new URL(url);
+    let videoId = urlObj.searchParams.get('v');
+    if (!videoId && urlObj.hostname === 'youtu.be') {
+      videoId = urlObj.pathname.slice(1).split(/[?#]/)[0];
+    }
 
-    if (match && match[1]) {
-      const videoId = match[1];
+    if (videoId) {
       outputDiv.innerHTML = `<div class="section-title">YouTube Video ID</div><p>${videoId}</p><p>Fetching comments...</p>`;
 
       const comments = await fetchComments(videoId);
@@ -139,12 +141,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
       while (comments.length < 500) {
         const response = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&pageToken=${pageToken}&key=${API_KEY}`);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || `YouTube API error: ${response.status}`);
+        }
+
         const data = await response.json();
         if (data.items) {
           data.items.forEach(item => {
             const commentText = item.snippet.topLevelComment.snippet.textOriginal;
             const timestamp = item.snippet.topLevelComment.snippet.publishedAt;
-            const authorId = item.snippet.topLevelComment.snippet.authorChannelId?.value || 'Unknown';
+            const authorId = item.snippet.topLevelComment.snippet.authorChannelId || 'Unknown';
             comments.push({ text: commentText, timestamp: timestamp, authorId: authorId });
           });
         }
@@ -153,7 +161,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     } catch (error) {
       console.error("Error fetching comments:", error);
-      outputDiv.innerHTML += "<p>Error fetching comments.</p>";
+      outputDiv.innerHTML += `<p>Error fetching comments: ${error.message}</p>`;
     }
     return comments;
   }
@@ -301,7 +309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (error) {
       console.error("Error fetching summary:", error);
       const container = document.getElementById('summary-container');
-      if (container)       container.innerHTML = `<div class="summary-text">${simpleMarkdownToHtml(result.summary)}</div>`;
+      if (container)       container.innerHTML = `<div class="summary-text">Error generating summary: ${error.message}</div>`;
     }
   }
 });
